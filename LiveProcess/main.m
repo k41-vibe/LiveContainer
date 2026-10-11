@@ -33,6 +33,75 @@ static NSDictionary *retrievedAppInfo;
 }
 @end
 
+// Host for guest apps' App Extensions (e.g. Gecko child processes in Reynard).
+// The guest app (running inside LiveContainer) sends an extension request to
+// our LiveProcess.appex with these keys in the input item's userInfo:
+//  - lcGuestExtensionPath: absolute path to the guest .appex
+//  - lcGuestExtensionPrincipalClass: principal class name (optional, falls back
+//    to the appex's own Info.plist)
+//  - lcGuestExtensionInputItems: NSExtensionItems forwarded to the guest handler
+// Sandbox access to the .appex is granted by adding a bookmark to "bookmarks",
+// which the normal bookmark resolution loop below already handles.
+@interface LCGuestExtensionContext : NSExtensionContext
+@property(nonatomic, copy) NSArray *guestInputItems;
+@end
+@implementation LCGuestExtensionContext
+- (NSArray *)inputItems {
+    return self.guestInputItems;
+}
+- (void)cancelRequestWithError:(NSError *)error {
+    [LiveProcessHandler.extensionContext cancelRequestWithError:error];
+}
+@end
+
+static int LCLaunchGuestExtensionProcess(NSDictionary *appInfo) {
+    NSString *extPath = appInfo[@"lcGuestExtensionPath"];
+    NSBundle *extBundle = [NSBundle bundleWithPath:extPath];
+    NSCAssert(extBundle, @"[LC] guest extension bundle not found at %@", extPath);
+
+    // Make @executable_path resolve into the guest app bundle so frameworks
+    // embedded there can be found (same trick as bootStrapGuestApp)
+    NSString *execPath = extBundle.executablePath;
+    NSCAssert(execPath, @"[LC] guest extension executable not found in %@", extPath);
+    const char *appExecPath = execPath.fileSystemRepresentation;
+    const char **processPath = _CFGetProcessPath();
+    if(processPath) *processPath = appExecPath;
+    overwriteExecPath(appExecPath);
+
+    // Cross-bundle loading requires the library validation bypass when JIT is on
+    int csFlags = 0;
+    csops(getpid(), 0, &csFlags, sizeof(csFlags));
+    if(csFlags & CS_DEBUGGED) {
+        init_bypassDyldLibValidation();
+    }
+
+    __block void *handle = NULL;
+    bypass_seg_count_check(^{
+        handle = dlopen_nolock(appExecPath, RTLD_LAZY | RTLD_GLOBAL);
+    });
+    NSCAssert(handle, @"[LC] dlopen guest extension failed: %s", dlerror());
+
+    NSString *principalName = appInfo[@"lcGuestExtensionPrincipalClass"];
+    if(!principalName) {
+        principalName = extBundle.infoDictionary[@"NSExtension"][@"NSExtensionPrincipalClass"];
+    }
+    Class principalClass = NSClassFromString(principalName);
+    NSCAssert(principalClass, @"[LC] guest extension principal class %@ not found", principalName);
+
+    LCGuestExtensionContext *context = [[LCGuestExtensionContext alloc] init];
+    context.guestInputItems = appInfo[@"lcGuestExtensionInputItems"];
+    NSCAssert(context.guestInputItems, @"[LC] missing lcGuestExtensionInputItems");
+
+    id<NSExtensionRequestHandling> handler = [[principalClass alloc] init];
+    NSCAssert(handler, @"[LC] failed to create guest extension handler");
+    [handler beginRequestWithExtensionContext:context];
+
+    // Keep the process (and the extension request) alive; the guest handler
+    // blocks in its own main loop and/or services the runloop from here
+    CFRunLoopRun();
+    return 0;
+}
+
 extern int LiveContainerMain(int argc, char *argv[]);
 static char **_envp, **_apple = NULL;
 int LiveProcessMain(int argc, char *argv[]) {
@@ -75,7 +144,13 @@ int LiveProcessMain(int argc, char *argv[]) {
         bookmarkedUrls[i] = [NSURL URLByResolvingBookmarkData:bookmarks[i] options:0 relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
         access = [bookmarkedUrls[i] startAccessingSecurityScopedResource];
     }
-    
+
+    // Guest apps may ask us to host their App Extensions (e.g. Gecko child
+    // processes); this must run after bookmark resolution for sandbox access
+    if(appInfo[@"lcGuestExtensionPath"]) {
+        return LCLaunchGuestExtensionProcess(appInfo);
+    }
+
     if ([appInfo[@"selected"] isEqualToString:@"builtinSideStore"]) {
         if(access && bookmarkedUrls.count > 0) {
             [lcUserDefaults setObject:bookmarkedUrls.firstObject.path forKey:@"specifiedSideStoreContainerPath"];
