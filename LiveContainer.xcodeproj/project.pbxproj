@@ -145,8 +145,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				17E23DE92F443A9300C55733 /* ShareExtension.appex in Embed Foundation Extensions */,
-				17CAED2C2F234814008B1977 /* LaunchAppExtension.appex in Embed Foundation Extensions */,
 				E1292AF32DCA3A660065E12D /* LiveProcess.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
@@ -685,8 +683,6 @@
 				E1292AF22DCA3A660065E12D /* PBXTargetDependency */,
 				E1292BEA2DCA3B670065E12D /* PBXTargetDependency */,
 				173545AD2E2C7913001B3B4C /* PBXTargetDependency */,
-				17CAE61F2F230449008B1977 /* PBXTargetDependency */,
-				17E23DE82F443A9300C55733 /* PBXTargetDependency */,
 			);
 			name = LiveContainer;
 			productName = jump;
