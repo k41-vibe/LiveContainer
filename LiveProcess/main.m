@@ -49,20 +49,34 @@ static NSDictionary *retrievedAppInfo;
 - (NSArray *)inputItems {
     return self.guestInputItems;
 }
+// Both completion paths are forwarded so the guest handler can finish or
+// cancel the request it was started for
 - (void)cancelRequestWithError:(NSError *)error {
     [LiveProcessHandler.extensionContext cancelRequestWithError:error];
 }
+- (void)completeRequestReturningItems:(NSArray *)items completionHandler:(void (^)(BOOL expired))completionHandler {
+    [LiveProcessHandler.extensionContext completeRequestReturningItems:items completionHandler:completionHandler];
+}
 @end
 
-static int LCLaunchGuestExtensionProcess(NSDictionary *appInfo) {
+// Unlike NSCAssert (compiled out in Release), failures here cancel the host's
+// extension request, which surfaces the message to the guest app and to logs
+static NSError *GuestExtensionError(NSString *description) {
+    return [NSError errorWithDomain:@"LiveContainer.GuestExtension" code:1
+                           userInfo:@{NSLocalizedDescriptionKey: description}];
+}
+
+// Returns an error only when launch must be aborted; a nil return hands
+// control over to the guest handler for the remainder of the process lifetime
+static NSError *LCLaunchGuestExtensionProcessInner(NSDictionary *appInfo) {
     NSString *extPath = appInfo[@"lcGuestExtensionPath"];
     NSBundle *extBundle = [NSBundle bundleWithPath:extPath];
-    NSCAssert(extBundle, @"[LC] guest extension bundle not found at %@", extPath);
+    if(!extBundle) return GuestExtensionError([NSString stringWithFormat:@"guest extension bundle not found at %@", extPath]);
 
     // Make @executable_path resolve into the guest app bundle so frameworks
     // embedded there can be found (same trick as bootStrapGuestApp)
     NSString *execPath = extBundle.executablePath;
-    NSCAssert(execPath, @"[LC] guest extension executable not found in %@", extPath);
+    if(!execPath) return GuestExtensionError([NSString stringWithFormat:@"guest extension executable not found in %@", extPath]);
     const char *appExecPath = execPath.fileSystemRepresentation;
     const char **processPath = _CFGetProcessPath();
     if(processPath) *processPath = appExecPath;
@@ -76,26 +90,39 @@ static int LCLaunchGuestExtensionProcess(NSDictionary *appInfo) {
     }
 
     __block void *handle = NULL;
+    __block const char *dlerr = NULL;
     bypass_seg_count_check(^{
         handle = dlopen_nolock(appExecPath, RTLD_LAZY | RTLD_GLOBAL);
+        if(!handle) dlerr = dlerror();
     });
-    NSCAssert(handle, @"[LC] dlopen guest extension failed: %s", dlerror());
+    if(!handle) return GuestExtensionError([NSString stringWithFormat:@"dlopen guest extension failed: %s", dlerr ?: "unknown"]);
 
     NSString *principalName = appInfo[@"lcGuestExtensionPrincipalClass"];
     if(!principalName) {
         principalName = extBundle.infoDictionary[@"NSExtension"][@"NSExtensionPrincipalClass"];
     }
     Class principalClass = NSClassFromString(principalName);
-    NSCAssert(principalClass, @"[LC] guest extension principal class %@ not found", principalName);
+    if(!principalClass) return GuestExtensionError([NSString stringWithFormat:@"guest extension principal class %@ not found", principalName]);
+
+    id guestInputItems = appInfo[@"lcGuestExtensionInputItems"];
+    if(!guestInputItems) return GuestExtensionError(@"missing lcGuestExtensionInputItems");
 
     LCGuestExtensionContext *context = [[LCGuestExtensionContext alloc] init];
-    context.guestInputItems = appInfo[@"lcGuestExtensionInputItems"];
-    NSCAssert(context.guestInputItems, @"[LC] missing lcGuestExtensionInputItems");
+    context.guestInputItems = guestInputItems;
 
     id<NSExtensionRequestHandling> handler = [[principalClass alloc] init];
-    NSCAssert(handler, @"[LC] failed to create guest extension handler");
+    if(!handler) return GuestExtensionError(@"failed to create guest extension handler");
     [handler beginRequestWithExtensionContext:context];
+    return nil;
+}
 
+static int LCLaunchGuestExtensionProcess(NSDictionary *appInfo) {
+    NSError *error = LCLaunchGuestExtensionProcessInner(appInfo);
+    if(error) {
+        NSLog(@"[LC] guest extension launch failed: %@", error);
+        [LiveProcessHandler.extensionContext cancelRequestWithError:error];
+        return 0;
+    }
     // Keep the process (and the extension request) alive; the guest handler
     // blocks in its own main loop and/or services the runloop from here
     CFRunLoopRun();

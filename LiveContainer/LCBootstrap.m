@@ -669,7 +669,8 @@ int LiveContainerMain(int argc, char *argv[]) {
     lcSharedDefaults = [[NSUserDefaults alloc] initWithSuiteName: [LCSharedUtils appGroupID]];
     lcAppUrlScheme = NSBundle.mainBundle.infoDictionary[@"CFBundleURLTypes"][0][@"CFBundleURLSchemes"][0];
     lcAppGroupPath = [[NSFileManager.defaultManager containerURLForSecurityApplicationGroupIdentifier:[NSClassFromString(@"LCSharedUtils") appGroupID]] path];
-    isLiveProcess = [lcAppUrlScheme isEqualToString:@"liveprocess"];
+    // "liveprocess" (upstream) or a variant scheme such as "liveprocessrc"
+    isLiveProcess = [lcAppUrlScheme hasPrefix:@"liveprocess"];
     setenv("LC_HOME_PATH", getenv("HOME"), 0);
 
     NSString *selectedApp = [lcUserDefaults stringForKey:@"selected"];
