@@ -94,7 +94,8 @@ class SharedModel: ObservableObject {
     public static let keychainAccessGroupCount = 128
     
     func updateMultiLCStatus() {
-        if LCUtils.appUrlScheme()?.lowercased() != "livecontainer" {
+        // livecontainerrc is this fork's primary variant, not a secondary LC
+        if !["livecontainer", "livecontainerrc"].contains(LCUtils.appUrlScheme()?.lowercased() ?? "") {
             multiLCStatus = 2
         } else {
             multiLCStatus = 0
