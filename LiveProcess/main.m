@@ -115,7 +115,10 @@ static NSError *LCLaunchGuestExtensionProcessInner(NSDictionary *appInfo) {
     LCGuestExtensionContext *context = [[LCGuestExtensionContext alloc] init];
     context.guestInputItems = guestInputItems;
 
-    id<NSExtensionRequestHandling> handler = [[principalClass alloc] init];
+    // A real extension host keeps the principal object alive for the process
+    // lifetime, and guests (Gecko) store it without retaining
+    static id<NSExtensionRequestHandling> handler;
+    handler = [[principalClass alloc] init];
     if(!handler) return GuestExtensionError(@"failed to create guest extension handler");
     [handler beginRequestWithExtensionContext:context];
     return nil;
