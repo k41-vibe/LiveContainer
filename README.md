@@ -1,211 +1,63 @@
 <div align="center">
-   <img width="217" height="217" src="./screenshots/livecontainer_icon.png" alt="Logo">
+  <img width="160" height="160" src="./screenshots/livecontainer_icon.png" alt="LiveContainer icon">
+  <h1>LiveContainer (ext-host fork)</h1>
+  <p><i>LiveContainer with App Extension hosting for guest apps</i></p>
 </div>
-   
 
-<div align="center">
-  <h1><b>LiveContainer</b></h1>
-  <p><i>An app launcher that runs iOS apps without actually installing them! </i></p>
-</div>
-<h6 align="center">
+This is a personal fork of [LiveContainer](https://github.com/LiveContainer/LiveContainer). It adds one feature: `LiveProcess.appex` can start the App Extensions that belong to a guest app. The goal is to run [Reynard Browser](https://github.com/minh-ton/reynard-browser), whose Gecko child processes are App Extensions, inside LiveContainer.
 
-Crowdin Project: [![Crowdin](https://badges.crowdin.net/livecontainer/localized.svg)](https://crowdin.com/project/livecontainer) &nbsp;| &nbsp; Documentation:[liveconainer.github.io](https://livecontainer.github.io/docs/intro)
+> [!WARNING]
+> This is an experimental test build and has not been confirmed on a real device yet.
+> It is not affiliated with the LiveContainer project. Please do not report issues from this build to upstream.
 
-# LiveContainer
+## Downloads
 
-- LiveContainer is an app launcher (not emulator or hypervisor) that allows you to run iOS apps inside it.
-- Allows you to install unlimited apps (3 app/10 app id free developer account limit does not apply here) with only one app & app id. You can also have multiple versions of an app installed with multiple data containers.
-- (Below iOS 26) When JIT is available, codesign is entirely bypassed, no need to sign your apps before installing. Otherwise, your app will be signed with the same certificate used by LiveContainer.
+All builds are attached to the [v3.8.10-rc1 release](https://github.com/k41-vibe/LiveContainer/releases/tag/v3.8.10-rc1).
 
-> [!CAUTION]
-> **Important Notice Regarding Third-Party Builds of LiveContainer**
->
-> We have recently noticed the appearance of certain closed-source third-party builds of LiveContainer. Please be aware that all your apps are installed within LiveContainer, which means these third-party builds **have full access to your data, including sensitive information such as keychain items and login credentials**. 
-> 
-> Furthermore, please note that we do not provide any support for issues of these third-party builds.
+| File | Bundle ID | Installs as | Extensions | Branch |
+|---|---|---|---|---|
+| `LiveContainer-RC-lite.ipa` | `com.k41.livecontainerrc` | A separate app next to regular LiveContainer | LiveProcess only | `isolated-rc` |
+| `LiveContainer-extswap.ipa` | `com.kdt.livecontainer` | An update that replaces regular LiveContainer | LiveProcess, ShareExtension, LaunchAppExtension | `reynard-ext-host` |
 
+The `1.0` release only holds AltStore source files inherited from the parent fork. It does not contain this build.
 
-# Installation
-**LiveContainer comes with a standalone version and a version with built-in SideStore. [Please read the install guide here](https://livecontainer.github.io/docs/installation)**
+## Installation
 
-If you encounter any issue please [read our FAQ here](https://livecontainer.github.io/docs/faq)
+1. Back up your data first. In the Files app, compress the `LiveContainer` folder under On My iPhone and copy the zip somewhere safe.
+2. Sign and install one of the IPAs above with AltStore or SideStore. Choose **Keep App Extensions**, because the guest extension host lives in `LiveProcess.appex`.
+3. Import a guest app that uses this feature, such as [Reynard (LiveContainer build)](https://github.com/k41-vibe/reynard-lc/releases/tag/v0.17.0-lc1). Choose Keep App Extensions here as well.
 
-### Standalone 
-<table>
-<tr>
-<td>
-Stable
-</td>
-<td>
-<a href="https://stikstore.app/altdirect/?url=https://github.com/LiveContainer/LiveContainer/releases/download/1.0/apps.json&exclude=livecontainer" target="_blank">
-   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
-</a>
-</td>
-<td>
-<a href="https://github.com/LiveContainer/LiveContainer/releases/latest/download/LiveContainer.ipa" target="_blank">
-   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
-</a>
-</td>
-</tr>
-<tr>
-<td>
-Nightly
-</td>
-<td>
-<a href="https://stikstore.app/altdirect/?url=https://github.com/LiveContainer/LiveContainer/releases/download/nightly/apps_nightly.json&exclude=livecontainer" target="_blank">
-   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
-</a>
-</td>
-<td>
-<a href="https://github.com/LiveContainer/LiveContainer/releases/download/nightly/LiveContainer.ipa" target="_blank">
-   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
-</a>
-</td>
-</tr>
-</table>
+To go back, install the official LiveContainer IPA over `LiveContainer-extswap.ipa`. App data stays because the bundle ID is the same.
 
-### LiveContainer+SideStore
-|Stable|Nightly|
-|:-:|:-:|
-|<a href="https://github.com/LiveContainer/LiveContainer/releases/latest/download/LiveContainer+SideStore.ipa" target="_blank"><img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200" /></a>|<a href="https://github.com/LiveContainer/LiveContainer/releases/download/nightly/LiveContainer+SideStore.ipa" target="_blank"><img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200" /></a>|
+## Differences from upstream
 
+Common to both branches:
 
-## Requirements
+- `LiveProcess/main.m`: when a request includes `lcGuestExtensionPath`, LiveProcess loads that guest `.appex` and runs its principal class instead of a guest app. Failures cancel the extension request with an error in the `LiveContainer.GuestExtension` domain.
 
-- iOS/iPadOS 15+
-   + Multitasking requires iOS/iPadOS 16.0+
-- AltStore 2.0+ / SideStore 0.6.0+
+`isolated-rc` only:
 
+- Bundle ID `com.k41.livecontainerrc` and keychain groups `com.k41.livecontainerrc.shared.*` for both the app and LiveProcess
+- URL schemes `livecontainerrc://` and `liveprocessrc://`, so links do not open the regular install
+- ShareExtension and LaunchAppExtension are removed to save App IDs. Importing from the share sheet and launching from Shortcuts are not available.
+- Orange app icon
 
-# Features & Guides
+Full diff: [main...isolated-rc](https://github.com/k41-vibe/LiveContainer/compare/main...isolated-rc), [main...reynard-ext-host](https://github.com/k41-vibe/LiveContainer/compare/main...reynard-ext-host)
 
-### Installing Apps
-- Open LiveContainer, tap the plus icon in the upper right hand corner and select IPA files to install.
-- Choose the app you want to open in the next launch.
-- You can long-press the app to manage it.
+## Branches
 
-### [Add Apps to Home Screen](https://livecontainer.github.io/docs/guides/add-to-home-screen)
-
-### [Multiple LiveContainers](https://livecontainer.github.io/docs/guides/multiple-livecontainers)
-Using multiple LiveContainers allows you to run multiples different apps simultaneously, with *almost* seamless data transfer between the LiveContainers.
-
-### [Multitasking](https://livecontainer.github.io/docs/guides/multitask)
-You can now launch multiple apps simultaneously in in-app virtual windows. These windows can be resized, scaled, and even displayed using the native Picture-in-Picture (PiP) feature. On iPads, apps can run in native window mode, displaying each app in a separate system window. And if you wish, you can choose to run apps in multitasking mode by default in settings.
-
-To use multitasking, hold its banner and tap **"Multitask"**. You can also make Multitask the default launch mode in settings.
-
->[!Note]
->1. To use multitasking, ensure you select **"Keep App Extensions"** when installing via SideStore/AltStore.  
->2. If you want to enable JIT for multitasked apps, you’ll need a JIT enabler that supports attaching by PID. (StikDebug)
-
-### [JIT Support](https://livecontainer.github.io/docs/guides/jit-support)
-### [Installing external tweaks](https://livecontainer.github.io/docs/guides/tweaks)
-### [Multiple Containers/External Containers](https://livecontainer.github.io/docs/guides/containers-and-external-data)
-### [Hiding Apps](https://livecontainer.github.io/docs/guides/lock-app)
-
-### Fix File Picker & Local Notification
-Some apps may experience issues with their file pickers or not be able to apply for notification permission in LiveContainer. To resolve this, enable "Fix File Picker" & "Fix Local Notifications" accordingly in the app-specific settings.
-
-### "Open In App" Support
-- You can simply share a URL or a file to app simply by using iOS's native share sheet. In share sheet, select LiveContainer, and LiveContainer will ask you which app you'd like to open that URL/file in.
-- What's more, you also can tap the link icon in the top-right corner of the "Apps" tab and input the URL. LiveContainer will detect the appropriate app and ask if you want to launch it.
-
-## Compatibility
-Unfortunately, not all apps work in LiveContainer, so we have a [compatibility list](https://github.com/LiveContainer/LiveContainer/labels/compatibility) to tell if there is apps that have issues. If they aren't on this list, then it's likely going run. However, if it doesn't work, please make an [issue](https://github.com/LiveContainer/LiveContainer/issues/new/choose) about it.
+| Branch | Contents |
+|---|---|
+| `main` | Upstream LiveContainer and this README |
+| `isolated-rc` | Separate-app build (RC-lite) |
+| `reynard-ext-host` | Regular-bundle-ID build (extswap) |
 
 ## Building
-Open Xcode, edit `DEVELOPMENT_TEAM[config=Debug]` in `xcconfigs/Global.xcconfig` to your team id and compile.
 
-## Project structure
-### Main executable
-- Core of LiveContainer
-- Contains the logic of setting up guest environment and loading guest app.
-- If no app is selected, it loads LiveContainerSwiftUI.
+Every push to a branch runs the `Xcode - Build` workflow on GitHub Actions. The unsigned IPA is uploaded as a workflow artifact. To build locally, open `LiveContainer.xcodeproj` in Xcode and archive the `LiveContainer` scheme for `iphoneos`.
 
-### LiveContainerSwiftUI
-- SwiftUI rewrite of LiveContainerUI (by @hugeBlack)
-- Language file `Localizable.xcstrings` is in here for multilingual support. To help us translate LiveContainer, please visit [our crowdin project](https://crowdin.com/project/livecontainer)
+## Credits and license
 
-### MultitaskSupport
-- Contains the implementation of multitasking feature.
-- Based on [FrontBoardAppLauncher](https://github.com/khanhduytran0/FrontBoardAppLauncher)
+LiveContainer is developed by the [LiveContainer contributors](https://github.com/LiveContainer/LiveContainer/graphs/contributors). Documentation and support are at [livecontainer.github.io](https://livecontainer.github.io/docs/intro).
 
-### SideStore
-- Supporting code for SideStore's app refreshing integration
-
-### TweakLoader
-- A simple tweak injector, which loads CydiaSubstrate and loads tweaks.
-- Injected to every app you install in LiveContainer.
-
-### ZSign
-- The app signer shipped with LiveContainer.
-- Originally made by [zhlynn](https://github.com/zhlynn/zsign).
-- LiveContainer uses [Feather's](https://github.com/khcrysalis/Feather) version of ZSign modified by khcrysalis.
-- Changes are made to meet LiveContainer's needs.
-
-## How does it work?
-
-### Patching guest executable
-- Patch `__PAGEZERO` segment:
-  + Change `vmaddr` to `0xFFFFC000` (`0x100000000 - 0x4000`)
-  + Change `vmsize` to `0x4000`
-- Change `MH_EXECUTE` to `MH_DYLIB`.
-- Inject a load command to load `TweakLoader.dylib`
-
-### Patching `@executable_path`
-- Hook `dyld4::APIs::_NSGetExecutablePath`
-- Call `_NSGetExecutablePath`
-- Replace `config.process.mainExecutablePath`
-  - Calculate address of `config.process.mainExecutablePath` using `dyld4::APIs` instance (passed as first parameter)
-  - Use `builtin_vm_protect` or TPRO unlock to make it writable
-  - Replace the address with one we have control of
-- Put the original `dyld4::APIs::_NSGetExecutablePath` back
-
-> Old Method
->- Call `_NSGetExecutablePath` with an invalid buffer pointer input -> SIGSEGV
->- Do some [magic stuff](https://github.com/khanhduytran0/LiveContainer/blob/5ef1e6a/main.m#L74-L115) to overwrite the contents of executable_path.
-
-### Patching `NSBundle.mainBundle`
-- This property is overwritten with the guest app's bundle.
-
-### Bypassing Library Validation
-- JIT is optional to bypass codesigning. In JIT-less mode, all executables are signed so this does not apply.
-- Derived from [Restoring Dyld Memory Loading](https://blog.xpnsec.com/restoring-dyld-memory-loading)
-
-### dlopening the executable
-- Call `dlopen` with the guest app's executable
-- TweakLoader loads all tweaks in the selected folder
-- Find the entry point
-- Jump to the entry point
-- The guest app's entry point calls `UIApplicationMain` and start up like any other iOS apps.
-
-### Multi-Account support & Keychain Semi-Separation
-[128 keychain access groups](./entitlements.xml) are created and LiveContainer allocates them randomly to each container of the same app. So you can create 128 container with different keychain access groups.
-
-## Limitations
-- Entitlements from the guest app are not applied to the host app. This isn't a big deal since sideloaded apps requires only basic entitlements.
-- App Permissions are globally applied.
-- Guest app containers are not sandboxed. This means one guest app can access other guest apps' data.
-- App extensions aren't supported. they cannot be registered because: LiveContainer is sandboxed, SpringBoard doesn't know what apps are installed in LiveContainer, and they take up App ID.
-- Multitasking can be achieved by using multiple LiveContainer and the multitasking feature. However, while we were able to fix physical keyboard input issue on iPadOS (https://github.com/LiveContainer/LiveContainer/issues/524), iPhone Mirroring uses different checks which still broke it (https://github.com/LiveContainer/LiveContainer/issues/793).
-- Remote push notification will not work
-- Querying custom URL schemes might not work(?)
-
-## TODO
-- Use ChOma instead of custom MachO parser
-
-## License
-[GNU Affero General Public License v3.0](https://github.com/LiveContainer/LiveContainer/blob/main/LICENSE)
-
-## Credits
-- [xpn's blogpost: Restoring Dyld Memory Loading](https://blog.xpnsec.com/restoring-dyld-memory-loading)
-- [LinusHenze's CFastFind](https://github.com/pinauten/PatchfinderUtils/blob/master/Sources/CFastFind/CFastFind.c): [MIT license](https://github.com/pinauten/PatchfinderUtils/blob/master/LICENSE)
-- [litehook](https://github.com/opa334/litehook): [MIT license](https://github.com/opa334/litehook/blob/main/LICENSE)
-- @haxi0 & @m1337v for icon
-- @Vishram1123 for the initial shortcut implementation.
-- @hugeBlack for SwiftUI contribution
-- @Staubgeborener for automatic AltStore/SideStore source updater
-- @fkunn1326 for improved app hiding
-- @slds1 for dynamic color feature
-- @Vishram1123 for iOS 26+ JIT Script Support
-- @StephenDev0 for AltStore source support
+This fork is distributed under the same [GNU AGPL-3.0](./LICENSE) license as upstream.
