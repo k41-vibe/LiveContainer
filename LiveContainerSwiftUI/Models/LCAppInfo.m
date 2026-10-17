@@ -308,7 +308,8 @@
     NSString *execPath = [NSString stringWithFormat:@"%@/%@", appPath, _infoPlist[@"CFBundleExecutable"]];
     
     // Update patch
-    int currentPatchRev = 7;
+    // 8: also patch App Extension executables so LiveProcess can dlopen them
+    int currentPatchRev = 8;
     bool needPatch = [info[@"LCPatchRevision"] intValue] < currentPatchRev;
     if (needPatch || forceSign) {
         // copy-delete-move to avoid EXC_BAD_ACCESS (SIGKILL - CODESIGNING)
@@ -347,6 +348,32 @@
             return;
         }
         self.is32bit = is32bit;
+
+        // Guest App Extensions are hosted by LiveProcess (lcGuestExtensionPath),
+        // which dlopens their executables, so they need the same exec-to-dylib
+        // patch as the main executable. TweakLoader is not injected into them.
+        NSString *pluginsPath = [appPath stringByAppendingPathComponent:@"PlugIns"];
+        for (NSString *appexName in [fm contentsOfDirectoryAtPath:pluginsPath error:nil]) {
+            if (![appexName.pathExtension isEqualToString:@"appex"]) continue;
+            NSBundle *appexBundle = [NSBundle bundleWithPath:[pluginsPath stringByAppendingPathComponent:appexName]];
+            NSString *appexExecPath = appexBundle.executablePath;
+            if (!appexExecPath) continue;
+            // copy-delete-move to avoid EXC_BAD_ACCESS (SIGKILL - CODESIGNING)
+            NSString *appexBackupPath = [appexExecPath stringByAppendingString:@"_LiveContainerPatchBackUp"];
+            NSError *err;
+            [fm copyItemAtPath:appexExecPath toPath:appexBackupPath error:&err];
+            [fm removeItemAtPath:appexExecPath error:&err];
+            [fm moveItemAtPath:appexBackupPath toPath:appexExecPath error:&err];
+            NSString *appexError = LCParseMachO(appexExecPath.UTF8String, false, ^(const char *path, struct mach_header_64 *header, int fd, void* filePtr) {
+                if(header->cputype == CPU_TYPE_ARM64) {
+                    LCPatchExecSlice(path, header, false);
+                }
+            });
+            if (appexError) {
+                NSLog(@"[LC] failed to patch app extension %@: %@", appexName, appexError);
+            }
+        }
+
         if (!is32bit) {
             LCPatchAppBundleFixupARM64eSlice([NSURL fileURLWithPath:appPath]);
         } else {
