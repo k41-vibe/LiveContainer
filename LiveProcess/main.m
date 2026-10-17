@@ -73,6 +73,11 @@ static NSError *LCLaunchGuestExtensionProcessInner(NSDictionary *appInfo) {
     NSBundle *extBundle = [NSBundle bundleWithPath:extPath];
     if(!extBundle) return GuestExtensionError([NSString stringWithFormat:@"guest extension bundle not found at %@", extPath]);
 
+    // A real extension process sees its own .appex as the main bundle; guest
+    // code such as Gecko's child bootstrap may look up resources through it
+    overwriteMainNSBundle(extBundle);
+    overwriteMainCFBundle();
+
     // Make @executable_path resolve into the guest app bundle so frameworks
     // embedded there can be found (same trick as bootStrapGuestApp)
     NSString *execPath = extBundle.executablePath;
